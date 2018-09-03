@@ -13,6 +13,12 @@ void main() {
     WebSocket.connect('ws://localhost:3000/websocket').then((ws) {
       ws.listen((event) {
         print(event);
+        final e = json.decode(event);
+        if (e['msg'] == "ping") {
+          final pong = Message.pong(null).toJson();
+          print(pong);
+          ws.add(pong);
+        }
       });
       final msg = '${Message.connect().toJson()}';
       ws.add(msg);
