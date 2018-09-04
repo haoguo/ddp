@@ -61,8 +61,6 @@ class LoggerMixin {
   int truncate;
   LoggingDataType _dtype;
 
-//  Logger(this.active, this._dtype, this.truncate);
-
   log(List<int> p, int n) {
     if (this.active) {
       int limit = n;
@@ -111,6 +109,11 @@ class ClientStats {
   int reconnects;
   int pingsSent;
   int pingsRecv;
+}
+
+class CollectionStats {
+  String name;
+  int count;
 }
 
 class StatsTrackerMixin {

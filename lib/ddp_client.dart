@@ -62,6 +62,8 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
 
   _IdManager _idManager;
 
+  Map<String, _MessageHandler> _messageHandlers;
+
   DdpClient(this._name, String url, String origin) {
     this.heartbeatInterval = const Duration(minutes: 1);
     this.heartbeatTimeout = const Duration(seconds: 15);
@@ -71,8 +73,19 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
     this._origin = origin;
 //    this._inbox = Stream();
 //    this.errors = Stream();
-
+    this._pings = {};
+    this._calls = {};
+    this._subs = {};
     this._connectionStatus = ConnectStatus.disconnected;
+    this._reconnectLock = Mutex();
+
+    this._writeSocketStats = WriterStats(null);
+    this._writeStats = WriterStats(null);
+    this._readSocketStats = ReaderStats(null);
+    this._readStats = ReaderStats(null);
+
+    this._idManager = _IdManager();
+
     this._statusListeners = [];
     this._connectionListener = [];
   }
@@ -155,13 +168,41 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
     this._subs[call.id] = call;
 
     this.send(Message.sub(call.id, subName, args));
+    return call;
   }
 
-  Future sub(String subName, List<dynamic> args) {}
+  Future<Call> sub(String subName, List<dynamic> args) {
+    Completer<Call> completer = Completer();
+    subscribe(subName, (call) => completer.complete(call), args);
+    return completer.future;
+  }
+
+  Call go(String serviceMethod, OnCallDone done, List<dynamic> args) {
+    if (args == null) {
+      args = [];
+    }
+    final call = Call()
+      ..id = this._idManager.next()
+      ..serviceMethod = serviceMethod
+      ..args = args
+      ..owner = this;
+    if (done == null) {
+      done = (c) {};
+    }
+    call.onceDone(done);
+    this._calls[call.id] = call;
+    this.send(Message.method(call.id, serviceMethod, args));
+    return call;
+  }
+
+  Future<Call> call(String serviceMethod, List<dynamic> args) {
+    Completer<Call> completer = Completer();
+    go(serviceMethod, (call) => completer.complete(call), args);
+    return completer.future;
+  }
 
   void send(dynamic msg) {
-    json.encode(msg);
-    // send to proxy
+    this._writeStats.add(json.encode(msg));
   }
 
   void close() {
@@ -180,13 +221,25 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
   }
 
   void resetStats() {
-    // stats reset todo add
+    this._readSocketStats.reset();
+    this._readStats.reset();
+    this._writeSocketStats.reset();
+    this._writeStats.reset();
     this._reconnects = 0;
     this._pingsIn = 0;
     this._pingsOut = 0;
   }
 
-  // ClientStats stats()
+  ClientStats stats() {
+    return ClientStats()
+      ..reads = this._readSocketStats.snapshot()
+      ..totalReads = this._readStats.snapshot()
+      ..writes = this._writeSocketStats.snapshot()
+      ..totalWrites = this._writeStats.snapshot()
+      ..reconnects = this._reconnects
+      ..pingsSent = this._pingsOut
+      ..pingsRecv = this._pingsIn;
+  }
 
   bool socketLogActive() {
     return this._writeLog.active;
@@ -205,13 +258,19 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
     return this._collections[name];
   }
 
-//  List<CollectionStats> collectionStats()
+  List<CollectionStats> collectionStats() {
+    List<CollectionStats> stats = [];
+    this._collections.forEach((name, collection) => stats.add(CollectionStats()
+      ..name = name
+      ..count = collection.findAll().length));
+    return stats;
+  }
+
   void _start(WebSocket ws, _Connect connect) {
     this._status(ConnectStatus.connecting);
 
     this._ws = ws;
 
-    // TODO need to check
     this._writeLog.setWriter(ws);
     this._writeSocketStats = WriterStats(this._writeLog);
     this._writeStats.setWriter(this._writeSocketStats);
@@ -219,7 +278,8 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
     this._readSocketStats = ReaderStats(this._readLog);
     this._readStats.setReader(this._readSocketStats);
 
-    // todo event emitter;
+    this._initMessageHandlers();
+
     this.send(connect);
   }
 
@@ -255,9 +315,9 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
     this._pings[id].add(pingTracker);
   }
 
-  void some() {
-    Map<String, _MessageHandler> fn = {};
-    fn['connected'] = (msg) {
+  void _initMessageHandlers() {
+    this._messageHandlers = {};
+    this._messageHandlers['connected'] = (msg) {
       this._status(ConnectStatus.connected);
       this._collections.values.forEach((c) => c._init());
       this._version = '1';
@@ -267,7 +327,7 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
       });
       this._connectionListener.forEach((l) => l());
     };
-    fn['ping'] = (msg) {
+    this._messageHandlers['ping'] = (msg) {
       if (msg.containsKey('id')) {
         this.send(Message.pong(msg['id']));
       } else {
@@ -275,7 +335,7 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
       }
       this._pingsIn++;
     };
-    fn['pong'] = (msg) {
+    this._messageHandlers['pong'] = (msg) {
       var key = '';
       if (msg.containsKey('id')) {
         key = msg['id'] as String;
@@ -293,7 +353,7 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
         }
       }
     };
-    fn['nosub'] = (msg) {
+    this._messageHandlers['nosub'] = (msg) {
       this._log('Subscription returned a nosub error $msg');
       if (msg.containsKey('id')) {
         final id = msg['id'] as String;
@@ -306,7 +366,7 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
         }
       }
     };
-    fn['ready'] = (msg) {
+    this._messageHandlers['ready'] = (msg) {
       if (msg.containsKey('subs')) {
         final subs = msg['subs'] as List<dynamic>;
         subs.forEach((sub) {
@@ -316,12 +376,17 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
         });
       }
     };
-    fn['added'] = (msg) => this._collectionBy(msg)._added(msg);
-    fn['changed'] = (msg) => this._collectionBy(msg)._changed(msg);
-    fn['removed'] = (msg) => this._collectionBy(msg)._removed(msg);
-    fn['addedBefore'] = (msg) => this._collectionBy(msg)._addedBefore(msg);
-    fn['movedBefore'] = (msg) => this._collectionBy(msg)._movedBefore(msg);
-    fn['result'] = (msg) {
+    this._messageHandlers['added'] =
+        (msg) => this._collectionBy(msg)._added(msg);
+    this._messageHandlers['changed'] =
+        (msg) => this._collectionBy(msg)._changed(msg);
+    this._messageHandlers['removed'] =
+        (msg) => this._collectionBy(msg)._removed(msg);
+    this._messageHandlers['addedBefore'] =
+        (msg) => this._collectionBy(msg)._addedBefore(msg);
+    this._messageHandlers['movedBefore'] =
+        (msg) => this._collectionBy(msg)._movedBefore(msg);
+    this._messageHandlers['result'] = (msg) {
       if (msg.containsKey('id')) {
         final id = msg['id'];
         final call = this._calls[id];
@@ -336,7 +401,7 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
         call.done();
       }
     };
-    fn['updated'] = (msg) {};
+    this._messageHandlers['updated'] = (msg) {};
   }
 
   void inboxManager() {
@@ -344,6 +409,11 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
       final message = json.decode(event) as Map<String, dynamic>;
       if (message.containsKey('msg')) {
         final mtype = message['msg'];
+        if (this._messageHandlers.containsKey(mtype)) {
+          this._messageHandlers[mtype](message);
+        } else {
+          this._log('Server sent unexpected message ${message}');
+        }
       } else if (message.containsKey('server_id')) {
         final serverId = message['server_id'];
         if (serverId.runtimeType == String) {
