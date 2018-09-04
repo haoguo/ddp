@@ -4,7 +4,7 @@ version: 0.0.1
 author: haoguo <haog@felaxy.com>
 homepage: https://github.com/haoguo/ddp
 environment:
-  sdk: ">=1.8.0"
+  sdk: ">=1.8.0 <3.0.0"
 
 dependencies:
   mutex: ^1.0.1
