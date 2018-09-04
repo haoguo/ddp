@@ -7,6 +7,8 @@ enum ConnectStatus {
   connected,
 }
 
+typedef void _MessageHandler(Map<String, dynamic> message);
+
 typedef void ConnectionListener();
 typedef void StatusListener(ConnectStatus status);
 
@@ -19,16 +21,18 @@ abstract class StatusNotifier {
 }
 
 class DdpClient implements ConnectionNotifier, StatusNotifier {
+  String _name;
   Duration heartbeatInterval;
   Duration heartbeatTimeout;
   Duration reconnectInterval;
 
-//  WriterStats _writeSocketStats;
-//  WriterStats _writeStats;
-//  WriterLogger _writeLog;
-//  ReaderStats _readSocketStats;
-//  ReaderStats _readStats;
-//  ReaderLogger _readLog;
+  WriterStats _writeSocketStats;
+  WriterStats _writeStats;
+  WriterLogger _writeLog;
+  ReaderStats _readSocketStats;
+  ReaderStats _readStats;
+  ReaderLogger _readLog;
+
   int _reconnects;
   int _pingsIn;
   int _pingsOut;
@@ -44,7 +48,7 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
 //  Stream _errors;
   Timer _pingTimer;
 
-//  Map<String, List<pingTracker>> _pings;
+  Map<String, List<_PingTracker>> _pings;
   Map<String, Call> _calls;
 
   Map<String, Call> _subs;
@@ -58,7 +62,7 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
 
   _IdManager _idManager;
 
-  DdpClient(String url, String origin) {
+  DdpClient(this._name, String url, String origin) {
     this.heartbeatInterval = const Duration(minutes: 1);
     this.heartbeatTimeout = const Duration(seconds: 15);
     this.reconnectInterval = const Duration(seconds: 5);
@@ -71,6 +75,10 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
     this._connectionStatus = ConnectStatus.disconnected;
     this._statusListeners = [];
     this._connectionListener = [];
+  }
+
+  void _log(String msg) {
+    print('[DdpClient - ${_name}] $msg');
   }
 
   String get session => _session;
@@ -181,7 +189,12 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
   // ClientStats stats()
 
   bool socketLogActive() {
-    return true; // Todo to be done
+    return this._writeLog.active;
+  }
+
+  void setSocketLogActive(bool active) {
+    this._writeLog.active = true;
+    this._readLog.active = true;
   }
 
   Collection collectionByName(String name) {
@@ -197,7 +210,14 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
     this._status(ConnectStatus.connecting);
 
     this._ws = ws;
-    // todo writer and reader
+
+    // TODO need to check
+    this._writeLog.setWriter(ws);
+    this._writeSocketStats = WriterStats(this._writeLog);
+    this._writeStats.setWriter(this._writeSocketStats);
+    this._readLog.setReader(ws);
+    this._readSocketStats = ReaderStats(this._readLog);
+    this._readStats.setReader(this._readSocketStats);
 
     // todo event emitter;
     this.send(connect);
@@ -212,41 +232,138 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
     this._reconnectLock.release();
   }
 
-  void ping() {}
+  void ping() {
+    this.pingPong(this._idManager.next(), this.heartbeatTimeout, (err) {
+      if (err != null) {
+        this._reconnectLater();
+      }
+    });
+  }
+
+  void pingPong(String id, Duration timeout, Function(Error) handler) {
+    this.send(Message.ping(id));
+    this._pingsOut++;
+    if (!this._pings.containsKey(id)) {
+      this._pings[id] = [];
+    }
+    final pingTracker = _PingTracker()
+      .._handler = handler
+      .._timeout = timeout
+      .._timer = Timer(timeout, () {
+        handler(ArgumentError('ping timeout'));
+      });
+    this._pings[id].add(pingTracker);
+  }
+
+  void some() {
+    Map<String, _MessageHandler> fn = {};
+    fn['connected'] = (msg) {
+      this._status(ConnectStatus.connected);
+      this._collections.values.forEach((c) => c._init());
+      this._version = '1';
+      this._session = msg['session'] as String;
+      this._pingTimer = Timer(this.heartbeatInterval, () {
+        this.ping();
+      });
+      this._connectionListener.forEach((l) => l());
+    };
+    fn['ping'] = (msg) {
+      if (msg.containsKey('id')) {
+        this.send(Message.pong(msg['id']));
+      } else {
+        this.send(Message.pong(null));
+      }
+      this._pingsIn++;
+    };
+    fn['pong'] = (msg) {
+      var key = '';
+      if (msg.containsKey('id')) {
+        key = msg['id'] as String;
+      }
+      if (this._pings.containsKey(key)) {
+        final pings = this._pings[key];
+        if (pings.length > 0) {
+          final ping = pings[0];
+          final newPings = pings.sublist(1);
+          if (key.length == 0 || pings.length > 0) {
+            this._pings[key] = newPings;
+          }
+          ping._timer.cancel();
+          ping._handler(null);
+        }
+      }
+    };
+    fn['nosub'] = (msg) {
+      this._log('Subscription returned a nosub error $msg');
+      if (msg.containsKey('id')) {
+        final id = msg['id'] as String;
+        final runningSub = this._subs[id];
+        if (runningSub != null) {
+          runningSub.error = ArgumentError(
+              'Subscription returned a nosub error'); // TODO error type.
+          runningSub.done();
+          this._subs.remove(id);
+        }
+      }
+    };
+    fn['ready'] = (msg) {
+      if (msg.containsKey('subs')) {
+        final subs = msg['subs'] as List<dynamic>;
+        subs.forEach((sub) {
+          if (this._subs.containsKey(sub)) {
+            this._subs[sub].done();
+          }
+        });
+      }
+    };
+    fn['added'] = (msg) => this._collectionBy(msg)._added(msg);
+    fn['changed'] = (msg) => this._collectionBy(msg)._changed(msg);
+    fn['removed'] = (msg) => this._collectionBy(msg)._removed(msg);
+    fn['addedBefore'] = (msg) => this._collectionBy(msg)._addedBefore(msg);
+    fn['movedBefore'] = (msg) => this._collectionBy(msg)._movedBefore(msg);
+    fn['result'] = (msg) {
+      if (msg.containsKey('id')) {
+        final id = msg['id'];
+        final call = this._calls[id];
+        this._calls.remove(id);
+        if (msg.containsKey('error')) {
+          final e = msg['error'];
+          call.error = ArgumentError(json.encode(e)); // TODO Error Type
+          call.reply = e;
+        } else {
+          call.reply = msg['result'];
+        }
+        call.done();
+      }
+    };
+    fn['updated'] = (msg) {};
+  }
 
   void inboxManager() {
     this._ws.listen((event) {
       final message = json.decode(event) as Map<String, dynamic>;
       if (message.containsKey('msg')) {
         final mtype = message['msg'];
-        switch (mtype) {
-          case 'connected':
-            {
-              this._status(ConnectStatus.connected);
-              this._collections.values.forEach((c) => c._init());
-              this._version = '1';
-              this._session = message['session'] as String;
-//              this._pingTimer = Timer(this.heartbeatInterval, () {
-//                this.ping();
-//              });
-              this._connectionListener.forEach((l) => l());
-              break;
-            }
-          case 'failed':
-            {
-              break;
-            }
-          case 'ping':
-            {
-              if (message.containsKey('id')) {
-                this.send(Message.pong(message['id']));
-              } else {
-                this.send(Message.pong(null));
-              }
-              this._pingsIn++;
-            }
+      } else if (message.containsKey('server_id')) {
+        final serverId = message['server_id'];
+        if (serverId.runtimeType == String) {
+          this._serverId = serverId;
+        } else {
+          this._log('Server cluster node ${serverId}');
         }
+      } else {
+        this._log('Server sent message without `msg` field ${message}');
       }
     });
+  }
+
+  Collection _collectionBy(Map<String, dynamic> msg) {
+    if (msg.containsKey('collection')) {
+      final name = msg['collection'];
+      if (name.runtimeType == String) {
+        return this.collectionByName(name);
+      }
+    }
+    return Collection.mock();
   }
 }
