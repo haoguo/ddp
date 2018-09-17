@@ -47,6 +47,14 @@ class _Method extends Message {
   List<dynamic> args;
 
   _Method(String id, this.serviceMethod, this.args) : super(id, 'method');
+
+  @override
+  Map<String, dynamic> _toMap() {
+    final map = super._toMap();
+    map['method'] = this.serviceMethod;
+    map['params'] = args;
+    return map;
+  }
 }
 
 class _Sub extends Message {
@@ -54,6 +62,14 @@ class _Sub extends Message {
   List<dynamic> args;
 
   _Sub(String id, this.subName, this.args) : super(id, 'sub');
+
+  @override
+  Map<String, dynamic> _toMap() {
+    final map = super._toMap();
+    map['name'] = this.subName;
+    map['params'] = args;
+    return super._toMap();
+  }
 }
 
 class _Connect extends Message {
