@@ -84,6 +84,9 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
     this._readSocketStats = ReaderStats(null);
     this._readStats = ReaderStats(null);
 
+    this._writeLog = WriterLogger(null);
+    this._readLog = ReaderLogger(null);
+
     this._idManager = _IdManager();
 
     this._statusListeners = [];
