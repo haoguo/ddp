@@ -84,8 +84,8 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
     this._readSocketStats = ReaderStats(null);
     this._readStats = ReaderStats(null);
 
-    this._writeLog = WriterLogger(null);
-    this._readLog = ReaderLogger(null);
+    this._writeLog = WriterLogger.text(null);
+    this._readLog = ReaderLogger.text(null);
 
     this._idManager = _IdManager();
 
@@ -147,10 +147,10 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
     this._status(ConnectStatus.dialing);
     WebSocket.connect(this._url).then((connection) {
       this._start(connection, Message.reconnect(this._session));
-      this._calls.values.forEach((call) =>
-          this.send(Message.method(call.id, call.serviceMethod, call.args)));
-      this._subs.values.forEach((call) =>
-          this.send(Message.sub(call.id, call.serviceMethod, call.args)));
+      this._calls.values.forEach((call) => this.send(
+          Message.method(call.id, call.serviceMethod, call.args).toJson()));
+      this._subs.values.forEach((call) => this
+          .send(Message.sub(call.id, call.serviceMethod, call.args).toJson()));
     }).catchError(() {
       this.close();
       this._reconnectLater();
@@ -174,7 +174,7 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
     call.onceDone(done);
     this._subs[call.id] = call;
 
-    this.send(Message.sub(call.id, subName, args));
+    this.send(Message.sub(call.id, subName, args).toJson());
     return call;
   }
 
@@ -198,7 +198,7 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
     }
     call.onceDone(done);
     this._calls[call.id] = call;
-    this.send(Message.method(call.id, serviceMethod, args));
+    this.send(Message.method(call.id, serviceMethod, args).toJson());
     return call;
   }
 
@@ -209,7 +209,7 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
   }
 
   void send(dynamic msg) {
-    this._writeStats.add(json.encode(msg));
+    this._writeStats.add(msg);
   }
 
   void close() {
@@ -276,6 +276,7 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
   void _start(WebSocket ws, _Connect connect) {
     this._status(ConnectStatus.connecting);
 
+    this._initMessageHandlers();
     this._ws = ws;
 
     this._writeLog.setWriter(ws);
@@ -285,9 +286,9 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
     this._readSocketStats = ReaderStats(this._readLog);
     this._readStats.setReader(this._readSocketStats);
 
-    this._initMessageHandlers();
+    this.inboxManager();
 
-    this.send(connect);
+    this.send(connect.toJson());
   }
 
   void _reconnectLater() {
@@ -308,7 +309,7 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
   }
 
   void pingPong(String id, Duration timeout, Function(Error) handler) {
-    this.send(Message.ping(id));
+    this.send(Message.ping(id).toJson());
     this._pingsOut++;
     if (!this._pings.containsKey(id)) {
       this._pings[id] = [];
@@ -336,9 +337,9 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
     };
     this._messageHandlers['ping'] = (msg) {
       if (msg.containsKey('id')) {
-        this.send(Message.pong(msg['id']));
+        this.send(Message.pong(msg['id']).toJson());
       } else {
-        this.send(Message.pong(null));
+        this.send(Message.pong(null).toJson());
       }
       this._pingsIn++;
     };
@@ -412,7 +413,7 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
   }
 
   void inboxManager() {
-    this._ws.listen((event) {
+    this._readStats.listen((event) {
       final message = json.decode(event) as Map<String, dynamic>;
       if (message.containsKey('msg')) {
         final mtype = message['msg'];

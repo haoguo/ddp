@@ -61,7 +61,7 @@ class LoggerMixin {
   LoggingDataType _dtype;
   Logger _logger;
 
-  log(List<int> p, int n) {
+  log(dynamic p, int n) {
     if (this.active) {
       int limit = n;
       bool trancated = false;
@@ -72,9 +72,17 @@ class LoggerMixin {
       switch (this._dtype) {
         case LoggingDataType.DataText:
           if (trancated) {
-            this._logger('[${n}] ${utf8.decode(p.sublist(0, limit))}...');
+            if (p is List) {
+              this._logger('[${n}] ${utf8.decode(p.sublist(0, limit))}...');
+            } else if (p.runtimeType == String) {
+              this._logger('[${n}] ${p.substring(0, limit)}...');
+            }
           } else {
-            this._logger('[${n}] ${utf8.decode(p.sublist(0, limit))}');
+            if (p is List) {
+              this._logger('[${n}] ${utf8.decode(p.sublist(0, limit))}');
+            } else if (p.runtimeType == String) {
+              this._logger('[${n}] ${p.substring(0, limit)}');
+            }
           }
           break;
         case LoggingDataType.DataByte:
@@ -190,7 +198,13 @@ class StatsTrackerMixin {
 }
 
 class ReaderStats extends ReaderProxy with StatsTrackerMixin {
-  ReaderStats(Stream reader) : super(reader);
+  ReaderStats(Stream reader) : super(reader) {
+    this._bytes = 0;
+    this._ops = 0;
+    this._errors = 0;
+    this._start = DateTime.now();
+    _lock = Mutex();
+  }
 
   @override
   StreamSubscription listen(
@@ -212,7 +226,13 @@ class ReaderStats extends ReaderProxy with StatsTrackerMixin {
 }
 
 class WriterStats extends WriterProxy with StatsTrackerMixin {
-  WriterStats(StreamSink writer) : super(writer);
+  WriterStats(StreamSink writer) : super(writer) {
+    this._bytes = 0;
+    this._ops = 0;
+    this._errors = 0;
+    this._start = DateTime.now();
+    this._lock = Mutex();
+  }
 
   @override
   void add(dynamic event) {

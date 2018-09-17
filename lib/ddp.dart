@@ -28,7 +28,7 @@ class _IdManager {
     final next = this._next;
     this._next++;
     this._mutex.release();
-    return sprintf('%x', next);
+    return sprintf('%x', [next]);
   }
 }
 
