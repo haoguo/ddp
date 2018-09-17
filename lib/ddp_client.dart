@@ -91,6 +91,10 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
 
     this._statusListeners = [];
     this._connectionListener = [];
+
+    this._reconnects = 0;
+    this._pingsIn = 0;
+    this._pingsOut = 0;
   }
 
   void _log(String msg) {
