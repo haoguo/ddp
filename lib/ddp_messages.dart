@@ -68,7 +68,7 @@ class _Sub extends Message {
     final map = super._toMap();
     map['name'] = this.subName;
     map['params'] = args;
-    return super._toMap();
+    return map;
   }
 }
 
