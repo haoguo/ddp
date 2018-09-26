@@ -253,8 +253,9 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
   }
 
   void setSocketLogActive(bool active) {
-    this._writeLog.active = true;
-    this._readLog.active = true;
+    assert(active != null);
+    this._writeLog.active = active;
+    this._readLog.active = active;
   }
 
   Collection collectionByName(String name) {
