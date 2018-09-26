@@ -9,7 +9,7 @@ Tuple2<String, Map<String, dynamic>> _parseUpdate(Map<String, dynamic> update) {
     if (id.runtimeType == String) {
       if (update.containsKey('fields')) {
         final updates = update['fields'];
-        if (updates.runtimeType == Map) {
+        if (updates is Map) {
           return Tuple2(id, updates);
         }
       }
