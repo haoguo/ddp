@@ -16,6 +16,8 @@ class Message {
   factory Message.sub(String id, String subName, List<dynamic> args) =>
       _Sub(id, subName, args);
 
+  factory Message.unSub(String id) => _UnSub(id);
+
   factory Message.connect() => _Connect('1', ['1'], null);
 
   factory Message.reconnect(String session) => _Connect('1', ['1'], session);
@@ -70,6 +72,10 @@ class _Sub extends Message {
     map['params'] = args;
     return map;
   }
+}
+
+class _UnSub extends Message {
+  _UnSub(String id) : super(id, 'unsub');
 }
 
 class _Connect extends Message {

@@ -50,8 +50,9 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
 
   Map<String, List<_PingTracker>> _pings;
   Map<String, Call> _calls;
-
   Map<String, Call> _subs;
+  Map<String, Call> _unsubs;
+
   Map<String, Collection> _collections;
   ConnectStatus _connectionStatus;
   Timer _reconnectTimer;
@@ -76,6 +77,7 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
     this._pings = {};
     this._calls = {};
     this._subs = {};
+    this._unsubs = {};
     this._connectionStatus = ConnectStatus.disconnected;
     this._reconnectLock = Mutex();
 
@@ -181,6 +183,26 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
   Future<Call> sub(String subName, List<dynamic> args) {
     Completer<Call> completer = Completer();
     subscribe(subName, (call) => completer.complete(call), args);
+    return completer.future;
+  }
+
+  Call unSubscribe(String id, OnCallDone done) {
+    final call = Call()
+      ..id = id
+      ..owner = this;
+
+    if (done == null) {
+      done = (c) {};
+    }
+    call.onceDone(done);
+    this._unsubs[call.id] = call;
+    this.send(Message.unSub(call.id).toJson());
+    return call;
+  }
+
+  Future<Call> unSub(String id) {
+    Completer<Call> completer = Completer();
+    unSubscribe(id, (call) => completer.complete(call));
     return completer.future;
   }
 
@@ -363,15 +385,22 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
       }
     };
     this._messageHandlers['nosub'] = (msg) {
-      this._log('Subscription returned a nosub error $msg');
       if (msg.containsKey('id')) {
         final id = msg['id'] as String;
         final runningSub = this._subs[id];
         if (runningSub != null) {
+          print(runningSub);
+          this._log('Subscription returned a nosub error $msg');
           runningSub.error = ArgumentError(
               'Subscription returned a nosub error'); // TODO error type.
           runningSub.done();
           this._subs.remove(id);
+        }
+
+        final runningUnSub = this._unsubs[id];
+        if (runningUnSub != null) {
+          runningUnSub.done();
+          this._unsubs.remove(id);
         }
       }
     };
@@ -381,6 +410,7 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
         subs.forEach((sub) {
           if (this._subs.containsKey(sub)) {
             this._subs[sub].done();
+            this._subs.remove(sub);
           }
         });
       }
