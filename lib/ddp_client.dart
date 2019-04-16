@@ -153,7 +153,7 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
           Message.method(call.id, call.serviceMethod, call.args).toJson()));
       this._subs.values.forEach((call) => this
           .send(Message.sub(call.id, call.serviceMethod, call.args).toJson()));
-    }).catchError(() {
+    }).catchError((error) {
       this.close();
       this._reconnectLater();
     });
