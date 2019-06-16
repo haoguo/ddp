@@ -5,7 +5,6 @@ enum LoggingDataType {
   DataText,
 }
 
-//
 class ReaderProxy extends Stream<dynamic> {
   Stream<dynamic> _reader;
 
@@ -53,7 +52,7 @@ class WriterProxy implements StreamSink<dynamic> {
   void setWriter(StreamSink<dynamic> writer) => this._writer = writer;
 }
 
-typedef void Logger(Object);
+typedef void Logger(Object object);
 
 class LoggerMixin {
   bool active;
@@ -87,7 +86,7 @@ class LoggerMixin {
           break;
         case LoggingDataType.DataByte:
         default:
-          print(sprintf('%x', p.sublist(0, limit)));
+        // Don't know what to do? maybe dataByte is not necessary to log?
       }
     }
     return n;
@@ -165,15 +164,11 @@ class StatsTrackerMixin {
   int _ops;
   int _errors;
   DateTime _start;
-  Mutex _lock;
 
   int op(int n) {
-    this._lock.acquire();
-
     this._ops++;
     this._bytes += n;
 
-    this._lock.release();
     return n;
   }
 
@@ -203,7 +198,6 @@ class ReaderStats extends ReaderProxy with StatsTrackerMixin {
     this._ops = 0;
     this._errors = 0;
     this._start = DateTime.now();
-    _lock = Mutex();
   }
 
   @override
@@ -231,7 +225,6 @@ class WriterStats extends WriterProxy with StatsTrackerMixin {
     this._ops = 0;
     this._errors = 0;
     this._start = DateTime.now();
-    this._lock = Mutex();
   }
 
   @override

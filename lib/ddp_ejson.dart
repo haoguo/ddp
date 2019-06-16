@@ -33,4 +33,3 @@ class Doc {
     return item;
   }
 }
-

@@ -90,7 +90,7 @@ class KeyCache implements Collection {
   @override
   void _removed(Map<String, dynamic> msg) {
     final pair = _parseUpdate(msg);
-    if (pair.item1.length > 0) {
+    if (pair.item1.isNotEmpty) {
       this._items.remove(pair.item1);
       this._notify('remove', pair.item1, null);
     }

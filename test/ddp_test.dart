@@ -1,10 +1,9 @@
 import 'package:ddp/ddp.dart';
-import 'package:sprintf/sprintf.dart';
 import 'package:test/test.dart';
 
 void main() {
   test('IdManager', () {
-    print(sprintf('%x', [16]));
+    print(16.toRadixString(16));
   });
 
   test('DdpClientTest', () {

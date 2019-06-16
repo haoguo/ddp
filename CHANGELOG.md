@@ -1,3 +1,9 @@
+## [0.0.10]
+
+* Remove dependency [sprintf](https://pub.dev/packages/sprintf) now. Use int.**toRadixString** instead.
+* Remove dependency [mutex](https://pub.dev/packages/mutex) now. The previously use in sync code which is meaningless.
+* Merged [bobagold's pull request](https://github.com/haoguo/ddp/pull/4).
+
 ## [0.0.9] - Add NO sub
 
 * Add No Sub implementation of meteor DDP

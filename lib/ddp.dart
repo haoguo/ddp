@@ -4,8 +4,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:mutex/mutex.dart';
-import 'package:sprintf/sprintf.dart';
 import 'package:tuple/tuple.dart';
 
 part 'ddp_client.dart';
@@ -16,19 +14,15 @@ part 'ddp_stats.dart';
 
 class _IdManager {
   int _next;
-  Mutex _mutex;
 
   _IdManager() {
     this._next = 0;
-    this._mutex = Mutex();
   }
 
   String next() {
-    this._mutex.acquire();
     final next = this._next;
     this._next++;
-    this._mutex.release();
-    return sprintf('%x', [next]);
+    return next.toRadixString(16);
   }
 }
 

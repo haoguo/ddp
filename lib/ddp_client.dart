@@ -56,7 +56,6 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
   Map<String, Collection> _collections;
   ConnectStatus _connectionStatus;
   Timer _reconnectTimer;
-  Mutex _reconnectLock;
 
   List<StatusListener> _statusListeners;
   List<ConnectionListener> _connectionListener;
@@ -79,7 +78,6 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
     this._subs = {};
     this._unsubs = {};
     this._connectionStatus = ConnectStatus.disconnected;
-    this._reconnectLock = Mutex();
 
     this._writeSocketStats = WriterStats(null);
     this._writeStats = WriterStats(null);
@@ -137,12 +135,10 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
   }
 
   void reconnect() {
-    this._reconnectLock.acquire();
     if (this._reconnectTimer != null) {
       this._reconnectTimer.cancel();
       this._reconnectTimer = null;
     }
-    this._reconnectLock.release();
 
     this.close();
     this._reconnects++;
@@ -316,11 +312,9 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
 
   void _reconnectLater() {
     this.close();
-    this._reconnectLock.acquire();
     if (this._reconnectTimer == null) {
       this._reconnectTimer = Timer(this.reconnectInterval, this.reconnect);
     }
-    this._reconnectLock.release();
   }
 
   void ping() {
@@ -373,10 +367,10 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
       }
       if (this._pings.containsKey(key)) {
         final pings = this._pings[key];
-        if (pings.length > 0) {
+        if (pings.isNotEmpty) {
           final ping = pings[0];
           final newPings = pings.sublist(1);
-          if (key.length == 0 || pings.length > 0) {
+          if (key.isEmpty || pings.isNotEmpty) {
             this._pings[key] = newPings;
           }
           ping._timer.cancel();
