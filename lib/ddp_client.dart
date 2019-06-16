@@ -153,7 +153,7 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
           Message.method(call.id, call.serviceMethod, call.args).toJson()));
       this._subs.values.forEach((call) => this
           .send(Message.sub(call.id, call.serviceMethod, call.args).toJson()));
-    }).catchError(() {
+    }).catchError((error) {
       this.close();
       this._reconnectLater();
     });
@@ -353,7 +353,7 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
       this._collections.values.forEach((c) => c._init());
       this._version = '1';
       this._session = msg['session'] as String;
-      this._pingTimer = Timer(this.heartbeatInterval, () {
+      this._pingTimer = Timer.periodic(this.heartbeatInterval, (Timer timer) {
         this.ping();
       });
       this._connectionListener.forEach((l) => l());
