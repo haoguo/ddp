@@ -221,7 +221,7 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
   }
 
   Future<Call> call(String serviceMethod, List<dynamic> args) {
-    Completer<Call> completer = Completer();
+    final completer = Completer();
     go(serviceMethod, (call) => completer.complete(call), args);
     return completer.future;
   }

@@ -1,3 +1,7 @@
+## [0.0.11]
+
+* Remove ddp_ejson.dart file.
+
 ## [0.0.10]
 
 * Remove dependency [sprintf](https://pub.dev/packages/sprintf) now. Use int.**toRadixString** instead.

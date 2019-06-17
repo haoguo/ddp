@@ -25,7 +25,9 @@ class ReaderProxy extends Stream<dynamic> {
         );
   }
 
-  void setReader(Stream<dynamic> reader) => this._reader = reader;
+  void setReader(Stream<dynamic> reader) {
+    this._reader = reader;
+  }
 }
 
 class WriterProxy implements StreamSink<dynamic> {
@@ -34,31 +36,42 @@ class WriterProxy implements StreamSink<dynamic> {
   WriterProxy(this._writer);
 
   @override
-  void add(event) => this._writer.add(event);
+  void add(event) {
+    this._writer.add(event);
+  }
 
   @override
-  void addError(Object error, [StackTrace stackTrace]) =>
-      this._writer.addError(error, stackTrace);
+  void addError(Object error, [StackTrace stackTrace]) {
+    this._writer.addError(error, stackTrace);
+  }
 
   @override
-  Future addStream(Stream stream) => this._writer.addStream(stream);
+  Future addStream(Stream stream) {
+    return this._writer.addStream(stream);
+  }
 
   @override
-  Future close() => this._writer.close();
+  Future close() {
+    return this._writer.close();
+  }
 
   @override
-  Future get done => this._writer.done;
+  Future get done {
+    return this._writer.done;
+  }
 
-  void setWriter(StreamSink<dynamic> writer) => this._writer = writer;
+  void setWriter(StreamSink<dynamic> writer) {
+    this._writer = writer;
+  }
 }
 
-typedef void Logger(Object object);
+typedef void _Logger(Object object);
 
 class LoggerMixin {
   bool active;
   int truncate;
   LoggingDataType _dtype;
-  Logger _logger;
+  _Logger _logger;
 
   log(dynamic p, int n) {
     if (this.active) {
@@ -172,7 +185,9 @@ class StatsTrackerMixin {
     return n;
   }
 
-  Stats snapshot() => this._snap();
+  Stats snapshot() {
+    return this._snap();
+  }
 
   Stats reset() {
     final stats = this._snap();

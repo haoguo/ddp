@@ -8,20 +8,15 @@ import 'package:tuple/tuple.dart';
 
 part 'ddp_client.dart';
 part 'ddp_collection.dart';
-part 'ddp_ejson.dart';
 part 'ddp_messages.dart';
 part 'ddp_stats.dart';
 
 class _IdManager {
-  int _next;
-
-  _IdManager() {
-    this._next = 0;
-  }
+  int _next = 0;
 
   String next() {
-    final next = this._next;
-    this._next++;
+    final next = _next;
+    _next++;
     return next.toRadixString(16);
   }
 }
@@ -41,7 +36,6 @@ class Call {
   dynamic reply;
   Error error;
   DdpClient owner;
-
   List<OnCallDone> _handlers = [];
 
   void onceDone(OnCallDone fn) {
@@ -49,8 +43,8 @@ class Call {
   }
 
   void done() {
-    this.owner._calls.remove(this.id);
-    this._handlers.forEach((h) => h(this));
-    this._handlers = [];
+    owner._calls.remove(this.id);
+    _handlers.forEach((handler) => handler(this));
+    _handlers.clear();
   }
 }

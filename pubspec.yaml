@@ -1,6 +1,6 @@
 name: ddp
 description: MeteorJS DDP library for Dart.
-version: 0.0.10
+version: 0.0.11
 author: haoguo <bard.guo@gmail.com>
 homepage: https://github.com/haoguo/ddp
 environment:
