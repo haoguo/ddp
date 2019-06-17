@@ -18,6 +18,7 @@ abstract class ConnectionNotifier {
 
 abstract class StatusNotifier {
   void addStatusListener(StatusListener listener);
+  void removeStatusListener(StatusListener listener);
 }
 
 class DdpClient implements ConnectionNotifier, StatusNotifier {
@@ -113,6 +114,11 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
   @override
   void addStatusListener(StatusListener listener) {
     this._statusListeners.add(listener);
+  }
+
+  @override
+  void removeStatusListener(StatusListener listener) {
+    this._statusListeners.remove(listener);
   }
 
   void _status(ConnectStatus status) {

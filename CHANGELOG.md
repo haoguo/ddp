@@ -1,3 +1,7 @@
+## [0.0.12]
+
+* Add removeStatusListener for DdpClient
+
 ## [0.0.11]
 
 * Remove ddp_ejson.dart file.
