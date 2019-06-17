@@ -1,3 +1,7 @@
+## [0.0.13]
+
+* Add missing type parameter
+
 ## [0.0.12]
 
 * Add removeStatusListener for DdpClient

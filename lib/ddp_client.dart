@@ -183,7 +183,7 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
   }
 
   Future<Call> sub(String subName, List<dynamic> args) {
-    Completer<Call> completer = Completer();
+    final completer = Completer<Call>();
     subscribe(subName, (call) => completer.complete(call), args);
     return completer.future;
   }
@@ -203,7 +203,7 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
   }
 
   Future<Call> unSub(String id) {
-    Completer<Call> completer = Completer();
+    final completer = Completer<Call>();
     unSubscribe(id, (call) => completer.complete(call));
     return completer.future;
   }
@@ -227,7 +227,7 @@ class DdpClient implements ConnectionNotifier, StatusNotifier {
   }
 
   Future<Call> call(String serviceMethod, List<dynamic> args) {
-    final completer = Completer();
+    final completer = Completer<Call>();
     go(serviceMethod, (call) => completer.complete(call), args);
     return completer.future;
   }
